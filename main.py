@@ -1,5 +1,7 @@
+import os
 import aiohttp
 import configparser
+import speech_recognition as sr
 from fastapi import Request, FastAPI, HTTPException
 from linebot import (AsyncLineBotApi, WebhookParser)
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
@@ -36,28 +38,33 @@ async def handle_callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     for event in events:
+
         if isinstance(event.message, AudioMessage):
             message_content = await line_bot_api.get_message_content(event.message.id)
-            file_name = 'Audio.M4A'
-            with open(file_name, 'wb') as fd:
+            file_name = 'Audio'
+
+            with open(f'{file_name}.M4A', 'wb') as fd:
                 async for chunk in message_content.iter_content():
                     fd.write(chunk)
 
-            request_audio = AudioSegment.from_file(file_name, format="M4A")
-            file_handle = request_audio.export(file_name + '.wav', format="wav")
-            print(type(file_handle))
-            # audio_segment = AudioSegment.from_file(file_name, format="wav")
+            request_audio = AudioSegment.from_file(f'{file_name}.M4A', format="M4A")
+            file_handle = request_audio.export(f'{file_name}.wav', format="wav")
 
-            # ## Return message
-            # await line_bot_api.reply_message(
-            #     event.reply_token,
-            #     TextSendMessage(text=event.message.text)
-            # )
+            audio_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), f'{file_name}.wav')
+
+            r = sr.Recognizer()
+            with sr.AudioFile(audio_file) as source:
+                recognizer_audio = r.record(source)
+
+            # Return message
+            await line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=r.recognize_google(recognizer_audio, language='zh-TW'))
+            )
 
     return 'OK'
 
 
 @app.get("/")
 async def alive():
-    print('test')
     return {"message": "Alive"}
