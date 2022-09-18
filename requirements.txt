@@ -4,3 +4,4 @@ line-bot-sdk == 2.3.0
 aiohttp~=3.8.1
 pydub~=0.25.1
 ffmpeg~=1.4
+SpeechRecognition~=3.8.1
