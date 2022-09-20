@@ -1,12 +1,12 @@
-import os
 import aiohttp
 import configparser
 import speech_recognition as sr
+from io import BytesIO
 from fastapi import Request, FastAPI, HTTPException
 from linebot import (AsyncLineBotApi, WebhookParser)
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import (InvalidSignatureError)
-from linebot.models import AudioMessage, TextSendMessage, TextMessage
+from linebot.models import AudioMessage, TextSendMessage
 from pydub import AudioSegment
 
 config = configparser.ConfigParser()
@@ -19,10 +19,6 @@ session = aiohttp.ClientSession()
 async_http_client = AiohttpAsyncHttpClient(session)
 line_bot_api = AsyncLineBotApi(channel_access_token, async_http_client)
 parser = WebhookParser(channel_secret)
-
-
-async def process_file():
-    pass
 
 
 @app.post("/callback")
@@ -38,22 +34,19 @@ async def handle_callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     for event in events:
-
         if isinstance(event.message, AudioMessage):
             message_content = await line_bot_api.get_message_content(event.message.id)
-            file_name = 'Audio'
 
-            with open(f'{file_name}.M4A', 'wb') as fd:
-                async for chunk in message_content.iter_content():
-                    fd.write(chunk)
+            m4a_audio_bytes_io = BytesIO()
+            async for chunk in message_content.iter_content():
+                m4a_audio_bytes_io.write(chunk)
+            m4a_audio_bytes_io.seek(0)
 
-            request_audio = AudioSegment.from_file(f'{file_name}.M4A', format="M4A")
-            file_handle = request_audio.export(f'{file_name}.wav', format="wav")
-
-            audio_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), f'{file_name}.wav')
+            request_audio = AudioSegment.from_file(m4a_audio_bytes_io, format="M4A")
+            wav_audio_bytes_io = request_audio.export(format="wav")
 
             r = sr.Recognizer()
-            with sr.AudioFile(audio_file) as source:
+            with sr.AudioFile(wav_audio_bytes_io) as source:
                 recognizer_audio = r.record(source)
 
             # Return message
