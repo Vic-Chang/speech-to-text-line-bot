@@ -6,7 +6,7 @@ from fastapi import Request, FastAPI, HTTPException
 from linebot import (AsyncLineBotApi, WebhookParser)
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import (InvalidSignatureError)
-from linebot.models import AudioMessage, TextSendMessage
+from linebot.models import AudioMessage, TextSendMessage, MessageEvent
 from pydub import AudioSegment
 
 config = configparser.ConfigParser()
@@ -34,6 +34,9 @@ async def handle_callback(request: Request):
         raise HTTPException(status_code=400, detail="Invalid signature")
 
     for event in events:
+        if not isinstance(event, MessageEvent):
+            continue
+
         if isinstance(event.message, AudioMessage):
             message_content = await line_bot_api.get_message_content(event.message.id)
 
