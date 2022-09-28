@@ -1,5 +1,7 @@
+import os
 import aiohttp
 import configparser
+import logging
 import speech_recognition as sr
 from io import BytesIO
 from fastapi import Request, FastAPI, HTTPException
@@ -8,6 +10,11 @@ from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import (InvalidSignatureError)
 from linebot.models import AudioMessage, TextSendMessage, MessageEvent
 from pydub import AudioSegment
+
+if not os.path.isdir('log'):
+    os.mkdir('log')
+logging.basicConfig(filename='log/requests.log', format='%(levelname)s | %(asctime)s |  %(message)s'
+                    , datefmt='%Y-%m-%d %H:%M:%S', level=logging.INFO)
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -24,7 +31,6 @@ parser = WebhookParser(channel_secret)
 @app.post("/callback")
 async def handle_callback(request: Request):
     signature = request.headers['X-Line-Signature']
-
     body = await request.body()
     body = body.decode()
 
@@ -38,25 +44,28 @@ async def handle_callback(request: Request):
             continue
 
         if isinstance(event.message, AudioMessage):
-            message_content = await line_bot_api.get_message_content(event.message.id)
+            try:
+                logging.warning('Process...')
 
-            m4a_audio_bytes_io = BytesIO()
-            async for chunk in message_content.iter_content():
-                m4a_audio_bytes_io.write(chunk)
-            m4a_audio_bytes_io.seek(0)
+                message_content = await line_bot_api.get_message_content(event.message.id)
+                m4a_audio_bytes_io = BytesIO()
+                async for chunk in message_content.iter_content():
+                    m4a_audio_bytes_io.write(chunk)
+                m4a_audio_bytes_io.seek(0)
 
-            request_audio = AudioSegment.from_file(m4a_audio_bytes_io, format="M4A")
-            wav_audio_bytes_io = request_audio.export(format="wav")
+                request_audio = AudioSegment.from_file(m4a_audio_bytes_io, format="M4A")
+                wav_audio_bytes_io = request_audio.export(format="wav")
 
-            r = sr.Recognizer()
-            with sr.AudioFile(wav_audio_bytes_io) as source:
-                recognizer_audio = r.record(source)
+                r = sr.Recognizer()
+                with sr.AudioFile(wav_audio_bytes_io) as source:
+                    recognizer_audio = r.record(source)
 
-            # Return message
-            await line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text=r.recognize_google(recognizer_audio, language='zh-TW'))
-            )
+                await line_bot_api.reply_message(event.reply_token, TextSendMessage(
+                    text=r.recognize_google(recognizer_audio, language='zh-TW')))
+            except Exception as e:
+                logging.warning(e)
+                await line_bot_api.reply_message(event.reply_token,
+                                                 TextSendMessage(text='阿，出現了一些錯誤，請稍後在試'))
 
     return 'OK'
 
