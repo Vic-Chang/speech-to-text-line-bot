@@ -44,6 +44,7 @@ async def handle_callback(request: Request):
             continue
 
         if isinstance(event.message, AudioMessage):
+            result_content = ''
             try:
                 logging.warning('Process...')
 
@@ -59,13 +60,12 @@ async def handle_callback(request: Request):
                 r = sr.Recognizer()
                 with sr.AudioFile(wav_audio_bytes_io) as source:
                     recognizer_audio = r.record(source)
-
-                await line_bot_api.reply_message(event.reply_token, TextSendMessage(
-                    text=r.recognize_google(recognizer_audio, language='zh-TW')))
+                result_content = r.recognize_google(recognizer_audio, language='zh-TW')
             except Exception as e:
                 logging.warning(e)
-                await line_bot_api.reply_message(event.reply_token,
-                                                 TextSendMessage(text='阿，出現了一些錯誤，請稍後在試'))
+                result_content = '阿，出現了一些錯誤，請稍後在試'
+
+            await line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result_content))
 
     return 'OK'
 
