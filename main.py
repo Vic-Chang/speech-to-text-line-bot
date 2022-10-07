@@ -29,16 +29,6 @@ line_bot_api = AsyncLineBotApi(channel_access_token, async_http_client)
 parser = WebhookParser(channel_secret)
 
 
-async def wait_seconds(request_id):
-    print(f'[{os.getpid()}][{request_id}]  開始第一次等候!')
-    import time
-    time.sleep(5)
-    print(f'[{os.getpid()}][{request_id}]  開始第二次等候!')
-    time.sleep(5)
-    # await asyncio.sleep(5)
-    return 'ok'
-
-
 async def recognize(replay_token, line_message_id) -> None:
     """
     Recognize the speech from Line app audio message
