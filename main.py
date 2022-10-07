@@ -5,6 +5,7 @@ import logging
 import speech_recognition as sr
 from io import BytesIO
 from fastapi import Request, FastAPI, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from linebot import (AsyncLineBotApi, WebhookParser)
 from linebot.aiohttp_async_http_client import AiohttpAsyncHttpClient
 from linebot.exceptions import (InvalidSignatureError)
@@ -28,6 +29,45 @@ line_bot_api = AsyncLineBotApi(channel_access_token, async_http_client)
 parser = WebhookParser(channel_secret)
 
 
+async def wait_seconds(request_id):
+    print(f'[{os.getpid()}][{request_id}]  開始第一次等候!')
+    import time
+    time.sleep(5)
+    print(f'[{os.getpid()}][{request_id}]  開始第二次等候!')
+    time.sleep(5)
+    # await asyncio.sleep(5)
+    return 'ok'
+
+
+async def recognize(replay_token, line_message_id) -> None:
+    """
+    Recognize the speech from Line app audio message
+    :param replay_token: Line's message reply token
+    :param line_message_id: The message id of Line
+    """
+    result_content = ''
+    try:
+        logging.warning(f'[{replay_token}] Process...')
+
+        message_content = await line_bot_api.get_message_content(line_message_id)
+        m4a_audio_bytes_io = BytesIO()
+        async for chunk in message_content.iter_content():
+            m4a_audio_bytes_io.write(chunk)
+        m4a_audio_bytes_io.seek(0)
+
+        request_audio = AudioSegment.from_file(m4a_audio_bytes_io, format="M4A")
+        wav_audio_bytes_io = request_audio.export(format="wav")
+        r = sr.Recognizer()
+        with sr.AudioFile(wav_audio_bytes_io) as source:
+            recognizer_audio = r.record(source)
+        result_content = r.recognize_google(recognizer_audio, language='zh-TW')
+    except Exception as e:
+        logging.warning(e)
+        result_content = '阿，出現了一些錯誤，請稍後在試'
+    await line_bot_api.reply_message(replay_token, TextSendMessage(text=result_content))
+    return result_content
+
+
 @app.post("/callback")
 async def handle_callback(request: Request):
     signature = request.headers['X-Line-Signature']
@@ -44,28 +84,7 @@ async def handle_callback(request: Request):
             continue
 
         if isinstance(event.message, AudioMessage):
-            result_content = ''
-            try:
-                logging.warning('Process...')
-
-                message_content = await line_bot_api.get_message_content(event.message.id)
-                m4a_audio_bytes_io = BytesIO()
-                async for chunk in message_content.iter_content():
-                    m4a_audio_bytes_io.write(chunk)
-                m4a_audio_bytes_io.seek(0)
-
-                request_audio = AudioSegment.from_file(m4a_audio_bytes_io, format="M4A")
-                wav_audio_bytes_io = request_audio.export(format="wav")
-
-                r = sr.Recognizer()
-                with sr.AudioFile(wav_audio_bytes_io) as source:
-                    recognizer_audio = r.record(source)
-                result_content = r.recognize_google(recognizer_audio, language='zh-TW')
-            except Exception as e:
-                logging.warning(e)
-                result_content = '阿，出現了一些錯誤，請稍後在試'
-
-            await line_bot_api.reply_message(event.reply_token, TextSendMessage(text=result_content))
+            await run_in_threadpool(lambda: recognize(id, event.message.id))
 
     return 'OK'
 
