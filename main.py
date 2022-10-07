@@ -50,12 +50,11 @@ async def recognize(replay_token, line_message_id) -> None:
         r = sr.Recognizer()
         with sr.AudioFile(wav_audio_bytes_io) as source:
             recognizer_audio = r.record(source)
-        result_content = r.recognize_google(recognizer_audio, language='zh-TW')
+        result_content = await run_in_threadpool(lambda: r.recognize_google(recognizer_audio, language='zh-TW'))
     except Exception as e:
         logging.warning(e)
         result_content = '阿，出現了一些錯誤，請稍後在試'
     await line_bot_api.reply_message(replay_token, TextSendMessage(text=result_content))
-    return result_content
 
 
 @app.post("/callback")
@@ -74,8 +73,7 @@ async def handle_callback(request: Request):
             continue
 
         if isinstance(event.message, AudioMessage):
-            await run_in_threadpool(lambda: recognize(id, event.message.id))
-
+            await recognize(event.reply_token, event.message.id)
     return 'OK'
 
 
